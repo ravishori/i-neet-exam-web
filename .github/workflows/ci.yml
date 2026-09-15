@@ -160,7 +160,7 @@ jobs:
             NEXT_PUBLIC_API_URL=http://localhost:8000
           outputs: type=docker,dest=/tmp/${{ matrix.service }}-image.tar
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           input: /tmp/${{ matrix.service }}-image.tar
           format: table
