@@ -2,6 +2,6 @@
 # application code. Installed in CI as: pip install -r requirements.txt -r requirements-dev.txt
 -r requirements.txt
 
-ruff==0.8.4
+ruff==0.16.7
 pytest-cov==6.0.0
 pip-audit==2.7.3
