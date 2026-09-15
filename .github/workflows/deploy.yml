@@ -79,7 +79,7 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
 
       - name: Trivy vulnerability scan (informational — does not block deploy)
-        uses: aquasecurity/trivy-action@0.29.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ steps.repo.outputs.name }}/trinetra-${{ matrix.service }}:${{ steps.sha.outputs.sha }}
           format: table
