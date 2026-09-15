@@ -44,7 +44,7 @@ jobs:
           - service: web
             context: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.event.workflow_run.head_sha }}
 
