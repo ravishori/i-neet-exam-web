@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload Backend SARIF
 
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
 
         with:
           sarif_file: backend-trivy.sarif
@@ -135,7 +135,7 @@ jobs:
 
       - name: Upload Frontend SARIF
 
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
 
         with:
           sarif_file: frontend-trivy.sarif
