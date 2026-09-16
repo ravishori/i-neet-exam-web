@@ -14,7 +14,7 @@ structlog==24.4.0
 httpx==0.28.1
 python-multipart==0.0.20
 anthropic==0.42.0
-pymupdf==1.25.1
+pymupdf==1.28.2
 pyotp==2.9.0
 cryptography==44.0.0
 pytest==8.3.4
