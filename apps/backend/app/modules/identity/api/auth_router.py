@@ -38,7 +38,11 @@ from app.shared.responses import envelope
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
-_ALLOWED_OTP_PURPOSES = frozenset({"login_stepup", "email_verify", "sensitive_action"})
+_ALLOWED_OTP_PURPOSES = frozenset({"login_stepup", "email_verify", "sensitive_action", "email_login"})
+# Purposes that, on successful OTP verification, establish a full session
+# (mirrors mobile_otp_verify / mfa_verify) rather than just confirming
+# possession of the destination.
+_LOGIN_OTP_PURPOSES = frozenset({"email_login"})
 
 
 def _client_meta(request: Request) -> tuple[str, str]:
@@ -264,11 +268,28 @@ async def otp_request(payload: OtpRequest, db: AsyncSession = Depends(get_db)):
     "/otp/verify",
     dependencies=[Depends(rate_limit("otp_verify", limit=10, window_seconds=300, fail_closed=True))],
 )
-async def otp_verify(payload: OtpVerifyRequest, db: AsyncSession = Depends(get_db)):
+async def otp_verify(payload: OtpVerifyRequest, request: Request, db: AsyncSession = Depends(get_db)):
     if payload.purpose not in _ALLOWED_OTP_PURPOSES:
         raise AppError("Unsupported OTP purpose", code="OTP_PURPOSE_INVALID", status_code=400)
     await OtpService(db).verify_email_otp(email=payload.email, purpose=payload.purpose, code=payload.code)
-    return envelope(success=True, data={"verified": True})
+
+    if payload.purpose not in _LOGIN_OTP_PURPOSES:
+        return envelope(success=True, data={"verified": True})
+
+    # Login purpose: OTP is proof of possession of the mailbox — establish a
+    # full session the same way password login / mobile-OTP login / MFA
+    # verify do, reusing the same token-issuance code path.
+    ip, user_agent = _client_meta(request)
+    service = AuthService(db)
+    user = await service.authenticate_by_email_otp(email=payload.email, ip_address=ip, user_agent=user_agent)
+    if user is None:
+        raise AppError("Invalid or expired verification code", code="OTP_INVALID", status_code=400)
+
+    access_token, csrf_token = service.issue_tokens(user)
+    refresh_token = await service.issue_refresh_token(user, ip_address=ip, user_agent=user_agent)
+    result = envelope(success=True, data=_user_to_me(user))
+    set_auth_cookies(result, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf_token)
+    return result
 
 
 @router.post(

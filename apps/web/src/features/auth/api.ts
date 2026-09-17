@@ -33,10 +33,19 @@ export type RegisterPayload = {
 export type StateOption = { id: string; code: string; name: string };
 export type CityOption = { id: string; name: string };
 
+// Password login can short-circuit into a TOTP step-up challenge instead of
+// a session — mirrors auth_router.login's {"mfaRequired": true, "mfaToken"}
+// branch.
+export type LoginResult = MeResponse | { mfaRequired: true; mfaToken: string; email: string };
+
+function isMfaChallenge(result: LoginResult): result is { mfaRequired: true; mfaToken: string; email: string } {
+  return (result as { mfaRequired?: boolean }).mfaRequired === true;
+}
+
 export const authApi = {
   me: () => apiClient.get<MeResponse>("/api/v1/auth/me"),
   login: (data: { email: string; password: string }) =>
-    apiClient.post<MeResponse>("/api/v1/auth/login", data),
+    apiClient.post<LoginResult>("/api/v1/auth/login", data),
   register: (data: RegisterPayload) =>
     apiClient.post<MeResponse>("/api/v1/auth/register", data),
   logout: () => apiClient.post<{ loggedOut: boolean }>("/api/v1/auth/logout"),
@@ -46,7 +55,19 @@ export const authApi = {
     apiClient.post<{ message: string }>("/api/v1/auth/reset-password", data),
   verifyEmail: (data: { token: string }) =>
     apiClient.post<MeResponse>("/api/v1/auth/verify-email", data),
+  mfaVerify: (data: { mfa_token: string; code: string }) =>
+    apiClient.post<MeResponse>("/api/v1/auth/mfa/verify", data),
+  mobileOtpSend: (data: { mobile: string }) =>
+    apiClient.post<{ message: string; channel: string }>("/api/v1/auth/mobile/otp/send", data),
+  mobileOtpVerify: (data: { mobile: string; code: string }) =>
+    apiClient.post<MeResponse>("/api/v1/auth/mobile/otp/verify", data),
+  emailOtpRequest: (data: { email: string }) =>
+    apiClient.post<{ message: string }>("/api/v1/auth/otp/request", { ...data, purpose: "email_login" }),
+  emailOtpVerify: (data: { email: string; code: string }) =>
+    apiClient.post<MeResponse>("/api/v1/auth/otp/verify", { ...data, purpose: "email_login" }),
 };
+
+export { isMfaChallenge };
 
 export const locationsApi = {
   listStates: () => apiClient.get<StateOption[]>("/api/v1/locations/states"),

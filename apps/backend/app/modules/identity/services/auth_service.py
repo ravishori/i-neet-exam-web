@@ -339,6 +339,43 @@ class AuthService:
         logger.info("user_logged_in_mobile_otp", user_id=str(user.id))
         return user
 
+    async def authenticate_by_email_otp(
+        self,
+        *,
+        email: str,
+        ip_address: str | None,
+        user_agent: str | None,
+    ) -> User | None:
+        """Email-OTP-verified login. Returns the matching active user, or
+        None if no account exists for this email. Callers (auth_router.
+        otp_verify) must ensure the OTP was already verified via
+        OtpService.verify_email_otp BEFORE calling this method — no password
+        is checked here.
+
+        Non-enumerating: never raises when the email is unknown; the caller
+        translates ``None`` into the same generic invalid-code response the
+        OTP-mismatch branch returns.
+        """
+        email = email.lower().strip()
+        user = await self.users.get_by_email(email)
+        if user is None:
+            await self._record_login_attempt(None, email, False, "email_not_registered", ip_address, user_agent)
+            return None
+        if user.locked_until and user.locked_until > datetime.now(UTC):
+            await self._record_login_attempt(user.id, email, False, "account_locked", ip_address, user_agent)
+            raise AuthError("Account temporarily locked due to repeated failed attempts", code="ACCOUNT_LOCKED")
+        if user.status != "active":
+            await self._record_login_attempt(user.id, email, False, "account_suspended", ip_address, user_agent)
+            raise AuthError("This account has been suspended", code="ACCOUNT_SUSPENDED")
+
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.last_login_at = datetime.now(UTC)
+        await self.session.commit()
+        await self._record_login_attempt(user.id, email, True, "email_otp", ip_address, user_agent)
+        logger.info("user_logged_in_email_otp", user_id=str(user.id))
+        return user
+
     async def request_email_verification(self, user: User) -> str:
         plaintext, token_hash, expires_at = generate_verification_token()
         user.email_verification_token_hash = token_hash

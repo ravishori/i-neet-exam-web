@@ -36,6 +36,30 @@ export const registerSchema = z.object({
 });
 export type RegisterValues = z.infer<typeof registerSchema>;
 
+export const mobileOtpRequestSchema = z.object({
+  mobile: indianMobileSchema,
+});
+export type MobileOtpRequestValues = z.infer<typeof mobileOtpRequestSchema>;
+
+export const otpCodeSchema = z.object({
+  code: z
+    .string()
+    .min(6, "Enter the 6-digit code")
+    .max(6, "Enter the 6-digit code")
+    .regex(/^\d{6}$/, "Code must be 6 digits"),
+});
+export type OtpCodeValues = z.infer<typeof otpCodeSchema>;
+
+export const emailOtpRequestSchema = z.object({
+  email: z.string().email("Enter a valid email address"),
+});
+export type EmailOtpRequestValues = z.infer<typeof emailOtpRequestSchema>;
+
+export const mfaCodeSchema = z.object({
+  code: z.string().min(4, "Enter your authenticator code").max(64),
+});
+export type MfaCodeValues = z.infer<typeof mfaCodeSchema>;
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Enter a valid email address"),
 });
