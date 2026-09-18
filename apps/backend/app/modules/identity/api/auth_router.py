@@ -51,6 +51,18 @@ def _client_meta(request: Request) -> tuple[str, str]:
     return ip, user_agent
 
 
+def _mfa_challenge(user: User):
+    """Build the pending-MFA response for a TOTP-enabled user. Shared by every
+    login path (password, email-OTP) so none of them can bypass the second
+    factor by skipping this step — mobile-OTP is the sole intentional
+    exception (see mobile_otp_verify)."""
+    mfa_token = create_mfa_pending_token(user_id=user.id)
+    return envelope(
+        success=True,
+        data={"mfaRequired": True, "mfaToken": mfa_token, "email": user.email},
+    )
+
+
 def _user_to_me(user: User) -> dict:
     from datetime import UTC, datetime
 
@@ -122,11 +134,7 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
     user = await service.authenticate(email=payload.email, password=payload.password, ip_address=ip, user_agent=user_agent)
 
     if user.totp_enabled:
-        mfa_token = create_mfa_pending_token(user_id=user.id)
-        return envelope(
-            success=True,
-            data={"mfaRequired": True, "mfaToken": mfa_token, "email": user.email},
-        )
+        return _mfa_challenge(user)
 
     access_token, csrf_token = service.issue_tokens(user)
     refresh_token = await service.issue_refresh_token(user, ip_address=ip, user_agent=user_agent)
@@ -284,6 +292,13 @@ async def otp_verify(payload: OtpVerifyRequest, request: Request, db: AsyncSessi
     user = await service.authenticate_by_email_otp(email=payload.email, ip_address=ip, user_agent=user_agent)
     if user is None:
         raise AppError("Invalid or expired verification code", code="OTP_INVALID", status_code=400)
+
+    # Email-OTP proves mailbox possession, not the second factor — a user who
+    # has voluntarily enabled TOTP must still complete MFA step-up, exactly
+    # like password login. Unlike mobile-OTP, email possession is not treated
+    # as a strong-enough factor to skip this.
+    if user.totp_enabled:
+        return _mfa_challenge(user)
 
     access_token, csrf_token = service.issue_tokens(user)
     refresh_token = await service.issue_refresh_token(user, ip_address=ip, user_agent=user_agent)

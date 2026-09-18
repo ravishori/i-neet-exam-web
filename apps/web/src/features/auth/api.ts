@@ -64,7 +64,7 @@ export const authApi = {
   emailOtpRequest: (data: { email: string }) =>
     apiClient.post<{ message: string }>("/api/v1/auth/otp/request", { ...data, purpose: "email_login" }),
   emailOtpVerify: (data: { email: string; code: string }) =>
-    apiClient.post<MeResponse>("/api/v1/auth/otp/verify", { ...data, purpose: "email_login" }),
+    apiClient.post<LoginResult>("/api/v1/auth/otp/verify", { ...data, purpose: "email_login" }),
 };
 
 export { isMfaChallenge };

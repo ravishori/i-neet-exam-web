@@ -5,11 +5,13 @@ sensitive_action, login_stepup) which only return {"verified": true}."""
 import re
 import uuid
 
+import pyotp
 import pytest
 from sqlalchemy import select
 
 from app.modules.identity.models.otp import OtpChallenge
 from app.modules.identity.services.token_service import hash_opaque_token
+from conftest import csrf_headers
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -130,3 +132,59 @@ async def test_email_otp_login_unknown_email_generic_error(client, db_session, m
     verify = await client.post("/api/v1/auth/otp/verify", json={"email": email, "purpose": "email_login", "code": code})
     assert verify.status_code == 400
     assert "access_token" not in verify.cookies
+
+
+async def test_email_otp_login_with_totp_enabled_requires_mfa_step_up(client, db_session, monkeypatch):
+    """A user who has voluntarily enabled TOTP must not be able to skip their
+    second factor by using Email-OTP instead of password login."""
+    email = _email()
+    await _register(client, email)
+
+    from app.core import rate_limit as rl
+
+    async def no_limit(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(rl, "_check", no_limit)
+
+    setup = await client.post("/api/v1/auth/totp/setup", headers=csrf_headers(client))
+    assert setup.status_code == 200, setup.text
+    secret = setup.json()["data"]["secret"]
+
+    confirm = await client.post(
+        "/api/v1/auth/totp/confirm",
+        headers=csrf_headers(client),
+        json={"code": pyotp.TOTP(secret).now()},
+    )
+    assert confirm.status_code == 200, confirm.text
+
+    await client.post("/api/v1/auth/logout")
+
+    code = await _capture_code(client, email, monkeypatch, "email_login")
+    resp = await client.post("/api/v1/auth/otp/verify", json={"email": email, "purpose": "email_login", "code": code})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()["data"]
+    assert body.get("mfaRequired") is True
+    assert "mfaToken" in body
+    assert "access_token" not in resp.cookies
+
+    me_before = await client.get("/api/v1/auth/me")
+    assert me_before.status_code == 401
+
+    bad_mfa = await client.post(
+        "/api/v1/auth/mfa/verify",
+        json={"mfa_token": body["mfaToken"], "code": "000000"},
+    )
+    assert bad_mfa.status_code in (400, 401)
+    assert "access_token" not in bad_mfa.cookies
+
+    good_mfa = await client.post(
+        "/api/v1/auth/mfa/verify",
+        json={"mfa_token": body["mfaToken"], "code": pyotp.TOTP(secret).now()},
+    )
+    assert good_mfa.status_code == 200, good_mfa.text
+    assert "access_token" in good_mfa.cookies
+
+    me = await client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    assert me.json()["data"]["email"] == email

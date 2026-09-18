@@ -223,10 +223,13 @@ function MobileOtpLogin({ onDone }: { onDone: () => void }) {
 function EmailOtpLogin({ onDone }: { onDone: () => void }) {
   const request = useEmailOtpRequest();
   const verify = useEmailOtpVerify();
+  const mfaVerify = useMfaVerify();
   const [email, setEmail] = useState<string | null>(null);
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
 
   const requestForm = useForm<EmailOtpRequestValues>({ resolver: zodResolver(emailOtpRequestSchema) });
   const codeForm = useForm<OtpCodeValues>({ resolver: zodResolver(otpCodeSchema) });
+  const mfaForm = useForm<MfaCodeValues>({ resolver: zodResolver(mfaCodeSchema) });
 
   const onRequest = (values: EmailOtpRequestValues) => {
     request.mutate(values, { onSuccess: () => setEmail(values.email) });
@@ -234,8 +237,51 @@ function EmailOtpLogin({ onDone }: { onDone: () => void }) {
 
   const onVerify = (values: OtpCodeValues) => {
     if (!email) return;
-    verify.mutate({ email, code: values.code }, { onSuccess: onDone });
+    verify.mutate(
+      { email, code: values.code },
+      {
+        onSuccess: (result) => {
+          if (isMfaChallenge(result)) {
+            setMfaToken(result.mfaToken);
+          } else {
+            onDone();
+          }
+        },
+      }
+    );
   };
+
+  const onMfaSubmit = (values: MfaCodeValues) => {
+    if (!mfaToken) return;
+    mfaVerify.mutate({ mfa_token: mfaToken, code: values.code }, { onSuccess: onDone });
+  };
+
+  if (mfaToken) {
+    return (
+      <form onSubmit={mfaForm.handleSubmit(onMfaSubmit)} className="mt-4 flex flex-col gap-4">
+        {mfaVerify.isError && (
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage(mfaVerify.error)}</AlertDescription>
+          </Alert>
+        )}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="email-otp-mfa-code">Authenticator code</Label>
+          <Input
+            id="email-otp-mfa-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            {...mfaForm.register("code")}
+          />
+          {mfaForm.formState.errors.code && (
+            <p className="text-sm text-destructive">{mfaForm.formState.errors.code.message}</p>
+          )}
+        </div>
+        <Button type="submit" disabled={mfaVerify.isPending} className="mt-2">
+          {mfaVerify.isPending ? "Verifying…" : "Verify"}
+        </Button>
+      </form>
+    );
+  }
 
   if (email) {
     return (

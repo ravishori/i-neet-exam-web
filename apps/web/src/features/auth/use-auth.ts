@@ -54,7 +54,10 @@ export function useEmailOtpVerify() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: authApi.emailOtpVerify,
-    onSuccess: (user: MeResponse) => queryClient.setQueryData(ME_QUERY_KEY, user),
+    onSuccess: (result) => {
+      // MFA challenge is not a session — don't poison the "me" cache with it.
+      if (!isMfaChallenge(result)) queryClient.setQueryData(ME_QUERY_KEY, result);
+    },
   });
 }
 
