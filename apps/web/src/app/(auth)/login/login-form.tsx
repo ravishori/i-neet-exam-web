@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api-client";
 import { isMfaChallenge } from "@/features/auth/api";
 import {
+  useAuthMethods,
   useEmailOtpRequest,
   useEmailOtpVerify,
   useLogin,
@@ -44,6 +45,12 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const goToApp = () => router.push(searchParams.get("next") ?? "/student/dashboard");
 
+  // Never claim a login method works when its provider isn't configured —
+  // default to email/password only until the backend confirms otherwise.
+  const { data: methods } = useAuthMethods();
+  const showMobileOtp = methods?.mobileOtp === true;
+  const showEmailOtp = methods?.emailOtp === true;
+
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
@@ -54,18 +61,22 @@ export function LoginForm() {
         <Tabs defaultValue="password">
           <TabsList className="w-full">
             <TabsTrigger value="password">Password</TabsTrigger>
-            <TabsTrigger value="mobile">Mobile OTP</TabsTrigger>
-            <TabsTrigger value="email-otp">Email OTP</TabsTrigger>
+            {showMobileOtp && <TabsTrigger value="mobile">Mobile OTP</TabsTrigger>}
+            {showEmailOtp && <TabsTrigger value="email-otp">Email OTP</TabsTrigger>}
           </TabsList>
           <TabsContent value="password">
             <PasswordLogin onDone={goToApp} />
           </TabsContent>
-          <TabsContent value="mobile">
-            <MobileOtpLogin onDone={goToApp} />
-          </TabsContent>
-          <TabsContent value="email-otp">
-            <EmailOtpLogin onDone={goToApp} />
-          </TabsContent>
+          {showMobileOtp && (
+            <TabsContent value="mobile">
+              <MobileOtpLogin onDone={goToApp} />
+            </TabsContent>
+          )}
+          {showEmailOtp && (
+            <TabsContent value="email-otp">
+              <EmailOtpLogin onDone={goToApp} />
+            </TabsContent>
+          )}
         </Tabs>
         <div className="mt-4 flex justify-between text-sm text-muted-foreground">
           <Link href="/forgot-password" className="hover:underline">

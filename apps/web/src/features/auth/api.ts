@@ -33,6 +33,16 @@ export type RegisterPayload = {
 export type StateOption = { id: string; code: string; name: string };
 export type CityOption = { id: string; name: string };
 
+// Never claim a login method works when its provider isn't configured —
+// the login UI must only show tabs the backend actually reports available.
+export type AuthMethods = {
+  emailPassword: boolean;
+  mobileOtp: boolean;
+  emailOtp: boolean;
+  google: boolean;
+  microsoft: boolean;
+};
+
 // Password login can short-circuit into a TOTP step-up challenge instead of
 // a session — mirrors auth_router.login's {"mfaRequired": true, "mfaToken"}
 // branch.
@@ -44,6 +54,7 @@ function isMfaChallenge(result: LoginResult): result is { mfaRequired: true; mfa
 
 export const authApi = {
   me: () => apiClient.get<MeResponse>("/api/v1/auth/me"),
+  methods: () => apiClient.get<AuthMethods>("/api/v1/auth/methods"),
   login: (data: { email: string; password: string }) =>
     apiClient.post<LoginResult>("/api/v1/auth/login", data),
   register: (data: RegisterPayload) =>

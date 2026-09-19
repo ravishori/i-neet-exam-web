@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.exceptions import AppError
 from app.core.rate_limit import rate_limit, rate_limit_per_user
@@ -98,6 +99,29 @@ def _user_to_me(user: User) -> dict:
 # ``app.dependency_overrides``.
 def get_twilio_verify() -> TwilioVerifyService:
     return TwilioVerifyService()
+
+
+@router.get("/methods")
+async def auth_methods():
+    """Which login methods are actually usable right now — never claim a
+    provider works when its credentials aren't configured. Presence-only
+    check (no live provider call), so this stays cheap enough for the
+    public login page to call on every render."""
+    settings = get_settings()
+    return envelope(
+        success=True,
+        data={
+            "emailPassword": True,
+            "mobileOtp": bool(
+                settings.twilio_account_sid
+                and settings.twilio_auth_token
+                and settings.twilio_verify_service_sid
+            ),
+            "emailOtp": bool(settings.smtp_host and settings.smtp_from),
+            "google": bool(getattr(settings, "google_oauth_client_id", "") and getattr(settings, "google_oauth_client_secret", "")),
+            "microsoft": bool(getattr(settings, "microsoft_oauth_client_id", "") and getattr(settings, "microsoft_oauth_client_secret", "")),
+        },
+    )
 
 
 @router.post("/register", dependencies=[Depends(rate_limit("register", limit=5, window_seconds=60))])

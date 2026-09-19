@@ -15,6 +15,14 @@ export function useMe() {
   });
 }
 
+export function useAuthMethods() {
+  return useQuery({
+    queryKey: ["auth", "methods"] as const,
+    queryFn: authApi.methods,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
