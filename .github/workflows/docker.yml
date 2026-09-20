@@ -84,8 +84,8 @@ jobs:
         uses: docker/build-push-action@v6
 
         with:
-          context: ./apps/frontend
-          file: ./apps/frontend/Dockerfile
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
           push: false
           load: true
           tags: frontend:latest
@@ -171,8 +171,8 @@ jobs:
         uses: docker/build-push-action@v6
 
         with:
-          context: ./apps/frontend
-          file: ./apps/frontend/Dockerfile
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/frontend:latest

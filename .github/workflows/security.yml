@@ -89,7 +89,7 @@ jobs:
 
     - name: Install Frontend Dependencies
 
-      working-directory: apps/frontend
+      working-directory: apps/web
 
       run: |
         if [ -f package-lock.json ]; then
@@ -131,7 +131,7 @@ jobs:
 
     - name: npm audit
 
-      working-directory: apps/frontend
+      working-directory: apps/web
 
       run: |
         npm audit --audit-level=high
