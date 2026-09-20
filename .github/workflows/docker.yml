@@ -5,11 +5,13 @@ on:
     branches:
       - main
       - develop
+      - phase2-question-bank
 
   pull_request:
     branches:
       - main
       - develop
+      - phase2-question-bank
 
 permissions:
   contents: read

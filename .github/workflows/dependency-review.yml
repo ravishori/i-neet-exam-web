@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - phase2-question-bank
 
 permissions:
   contents: read
