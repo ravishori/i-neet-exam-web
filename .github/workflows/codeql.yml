@@ -104,7 +104,7 @@ jobs:
       - name: Install Frontend Dependencies
         if: matrix.language == 'javascript'
 
-        working-directory: apps/frontend
+        working-directory: apps/web
 
         run: |
           if [ -f package-lock.json ]; then
