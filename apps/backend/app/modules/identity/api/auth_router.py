@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.exceptions import AppError
 from app.core.rate_limit import rate_limit, rate_limit_per_user
@@ -38,13 +39,29 @@ from app.shared.responses import envelope
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
-_ALLOWED_OTP_PURPOSES = frozenset({"login_stepup", "email_verify", "sensitive_action"})
+_ALLOWED_OTP_PURPOSES = frozenset({"login_stepup", "email_verify", "sensitive_action", "email_login"})
+# Purposes that, on successful OTP verification, establish a full session
+# (mirrors mobile_otp_verify / mfa_verify) rather than just confirming
+# possession of the destination.
+_LOGIN_OTP_PURPOSES = frozenset({"email_login"})
 
 
 def _client_meta(request: Request) -> tuple[str, str]:
     ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
     return ip, user_agent
+
+
+def _mfa_challenge(user: User):
+    """Build the pending-MFA response for a TOTP-enabled user. Shared by every
+    login path (password, email-OTP) so none of them can bypass the second
+    factor by skipping this step — mobile-OTP is the sole intentional
+    exception (see mobile_otp_verify)."""
+    mfa_token = create_mfa_pending_token(user_id=user.id)
+    return envelope(
+        success=True,
+        data={"mfaRequired": True, "mfaToken": mfa_token, "email": user.email},
+    )
 
 
 def _user_to_me(user: User) -> dict:
@@ -84,6 +101,29 @@ def get_twilio_verify() -> TwilioVerifyService:
     return TwilioVerifyService()
 
 
+@router.get("/methods")
+async def auth_methods():
+    """Which login methods are actually usable right now — never claim a
+    provider works when its credentials aren't configured. Presence-only
+    check (no live provider call), so this stays cheap enough for the
+    public login page to call on every render."""
+    settings = get_settings()
+    return envelope(
+        success=True,
+        data={
+            "emailPassword": True,
+            "mobileOtp": bool(
+                settings.twilio_account_sid
+                and settings.twilio_auth_token
+                and settings.twilio_verify_service_sid
+            ),
+            "emailOtp": bool(settings.smtp_host and settings.smtp_from),
+            "google": bool(getattr(settings, "google_oauth_client_id", "") and getattr(settings, "google_oauth_client_secret", "")),
+            "microsoft": bool(getattr(settings, "microsoft_oauth_client_id", "") and getattr(settings, "microsoft_oauth_client_secret", "")),
+        },
+    )
+
+
 @router.post("/register", dependencies=[Depends(rate_limit("register", limit=5, window_seconds=60))])
 async def register(payload: RegisterRequest, request: Request, db: AsyncSession = Depends(get_db)):
     service = AuthService(db)
@@ -118,11 +158,7 @@ async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depe
     user = await service.authenticate(email=payload.email, password=payload.password, ip_address=ip, user_agent=user_agent)
 
     if user.totp_enabled:
-        mfa_token = create_mfa_pending_token(user_id=user.id)
-        return envelope(
-            success=True,
-            data={"mfaRequired": True, "mfaToken": mfa_token, "email": user.email},
-        )
+        return _mfa_challenge(user)
 
     access_token, csrf_token = service.issue_tokens(user)
     refresh_token = await service.issue_refresh_token(user, ip_address=ip, user_agent=user_agent)
@@ -264,11 +300,35 @@ async def otp_request(payload: OtpRequest, db: AsyncSession = Depends(get_db)):
     "/otp/verify",
     dependencies=[Depends(rate_limit("otp_verify", limit=10, window_seconds=300, fail_closed=True))],
 )
-async def otp_verify(payload: OtpVerifyRequest, db: AsyncSession = Depends(get_db)):
+async def otp_verify(payload: OtpVerifyRequest, request: Request, db: AsyncSession = Depends(get_db)):
     if payload.purpose not in _ALLOWED_OTP_PURPOSES:
         raise AppError("Unsupported OTP purpose", code="OTP_PURPOSE_INVALID", status_code=400)
     await OtpService(db).verify_email_otp(email=payload.email, purpose=payload.purpose, code=payload.code)
-    return envelope(success=True, data={"verified": True})
+
+    if payload.purpose not in _LOGIN_OTP_PURPOSES:
+        return envelope(success=True, data={"verified": True})
+
+    # Login purpose: OTP is proof of possession of the mailbox — establish a
+    # full session the same way password login / mobile-OTP login / MFA
+    # verify do, reusing the same token-issuance code path.
+    ip, user_agent = _client_meta(request)
+    service = AuthService(db)
+    user = await service.authenticate_by_email_otp(email=payload.email, ip_address=ip, user_agent=user_agent)
+    if user is None:
+        raise AppError("Invalid or expired verification code", code="OTP_INVALID", status_code=400)
+
+    # Email-OTP proves mailbox possession, not the second factor — a user who
+    # has voluntarily enabled TOTP must still complete MFA step-up, exactly
+    # like password login. Unlike mobile-OTP, email possession is not treated
+    # as a strong-enough factor to skip this.
+    if user.totp_enabled:
+        return _mfa_challenge(user)
+
+    access_token, csrf_token = service.issue_tokens(user)
+    refresh_token = await service.issue_refresh_token(user, ip_address=ip, user_agent=user_agent)
+    result = envelope(success=True, data=_user_to_me(user))
+    set_auth_cookies(result, access_token=access_token, refresh_token=refresh_token, csrf_token=csrf_token)
+    return result
 
 
 @router.post(
