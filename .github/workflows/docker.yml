@@ -5,11 +5,13 @@ on:
     branches:
       - main
       - develop
+      - phase2-question-bank
 
   pull_request:
     branches:
       - main
       - develop
+      - phase2-question-bank
 
 permissions:
   contents: read
@@ -82,8 +84,8 @@ jobs:
         uses: docker/build-push-action@v6
 
         with:
-          context: ./apps/frontend
-          file: ./apps/frontend/Dockerfile
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
           push: false
           load: true
           tags: frontend:latest
@@ -96,7 +98,7 @@ jobs:
 
       - name: Scan Backend Image
 
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.31.0
 
         with:
           image-ref: backend:latest
@@ -110,7 +112,7 @@ jobs:
 
       - name: Scan Frontend Image
 
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.31.0
 
         with:
           image-ref: frontend:latest
@@ -169,8 +171,8 @@ jobs:
         uses: docker/build-push-action@v6
 
         with:
-          context: ./apps/frontend
-          file: ./apps/frontend/Dockerfile
+          context: ./apps/web
+          file: ./apps/web/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository }}/frontend:latest
