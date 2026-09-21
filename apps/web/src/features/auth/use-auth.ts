@@ -69,6 +69,26 @@ export function useEmailOtpVerify() {
   });
 }
 
+export function useTotpSetup() {
+  return useMutation({ mutationFn: authApi.totpSetup });
+}
+
+export function useTotpConfirm() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: authApi.totpConfirm,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
+  });
+}
+
+export function useTotpDisable() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: authApi.totpDisable,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
+  });
+}
+
 export function useRegister() {
   const queryClient = useQueryClient();
   return useMutation({
