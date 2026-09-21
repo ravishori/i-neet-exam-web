@@ -76,6 +76,22 @@ export const authApi = {
     apiClient.post<{ message: string }>("/api/v1/auth/otp/request", { ...data, purpose: "email_login" }),
   emailOtpVerify: (data: { email: string; code: string }) =>
     apiClient.post<LoginResult>("/api/v1/auth/otp/verify", { ...data, purpose: "email_login" }),
+  totpSetup: () => apiClient.post<TotpSetupResult>("/api/v1/auth/totp/setup"),
+  totpConfirm: (data: { code: string }) =>
+    apiClient.post<TotpConfirmResult>("/api/v1/auth/totp/confirm", data),
+  totpDisable: (data: { code: string }) =>
+    apiClient.post<{ enabled: boolean }>("/api/v1/auth/totp/disable", data),
+};
+
+export type TotpSetupResult = {
+  secret: string;
+  otpauth_url: string;
+};
+
+export type TotpConfirmResult = {
+  enabled: boolean;
+  recoveryCodes: string[];
+  message: string;
 };
 
 export { isMfaChallenge };

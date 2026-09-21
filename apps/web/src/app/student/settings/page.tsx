@@ -16,6 +16,7 @@ import {
 } from "@/components/ds";
 import { ApiError } from "@/lib/api-client";
 import { usersApi } from "@/features/users/api";
+import { MfaSecurityCard } from "./mfa-security";
 
 const LANGUAGES = [
   { code: "en", label: "English" },
@@ -79,6 +80,8 @@ export default function SettingsPage() {
           </SurfaceCardContent>
         </SurfaceCard>
       )}
+
+      <MfaSecurityCard />
     </StudentPage>
   );
 }
