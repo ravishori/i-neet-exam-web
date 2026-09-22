@@ -62,7 +62,7 @@ jobs:
 
       - name: Build Backend Docker Image
 
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
 
         with:
           context: ./apps/backend
@@ -79,7 +79,7 @@ jobs:
 
       - name: Build Frontend Docker Image
 
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
 
         with:
           context: ./apps/frontend
@@ -148,7 +148,7 @@ jobs:
 
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
 
         with:
           context: ./apps/backend
@@ -166,7 +166,7 @@ jobs:
 
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
 
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
 
         with:
           context: ./apps/frontend
